@@ -12,7 +12,7 @@ export class EmailService {
         return false;
       }
 
-      this.transporter = nodemailer.createTransporter({
+      this.transporter = nodemailer.createTransport({
         host: settings.smtpServer,
         port: settings.smtpPort,
         secure: settings.smtpSecurity === 'SSL',
@@ -26,7 +26,9 @@ export class EmailService {
       });
 
       // Verify connection
-      await this.transporter.verify();
+      if (this.transporter) {
+        await this.transporter.verify();
+      }
       return true;
 
     } catch (error) {
