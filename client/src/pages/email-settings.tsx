@@ -35,9 +35,15 @@ export default function EmailSettings() {
   useEffect(() => {
     if (emailSettings) {
       setFormData({
-        ...emailSettings,
-        recipients: emailSettings.recipients.join(", "),
+        smtpServer: emailSettings.smtpServer || "",
+        smtpPort: emailSettings.smtpPort || 587,
+        smtpSecurity: emailSettings.smtpSecurity || "TLS",
+        fromEmail: emailSettings.fromEmail || "",
+        username: emailSettings.username || "",
         password: "", // Don't populate password for security
+        recipients: emailSettings.recipients ? emailSettings.recipients.join(", ") : "",
+        subjectTemplate: emailSettings.subjectTemplate || "RSS Summary - {date}",
+        isActive: emailSettings.isActive ?? true,
       });
     }
   }, [emailSettings]);
