@@ -23,34 +23,69 @@ export class RSSService {
 
   constructor() {
     this.parser = new Parser({
-      timeout: 10000,
+      timeout: 15000, // Increased timeout
       headers: {
-        'User-Agent': 'RSS-Automation-Service/1.0'
+        'User-Agent': 'Mozilla/5.0 (compatible; RSS-Automation-Service/1.0)'
+      },
+      maxRedirects: 10,
+      requestOptions: {
+        rejectUnauthorized: false
       }
     });
   }
 
-  async parseFeed(url: string): Promise<ParsedFeedData | null> {
-    try {
-      const feed = await this.parser.parseURL(url);
-      
-      return {
-        title: feed.title || 'Unknown Feed',
-        description: feed.description,
-        items: feed.items.map(item => ({
-          title: item.title,
-          link: item.link,
-          pubDate: item.pubDate,
-          content: item.content || item.contentSnippet,
-          contentSnippet: item.contentSnippet,
-          creator: item.creator,
-          categories: item.categories
-        }))
-      };
-    } catch (error) {
-      console.error(`Error parsing RSS feed ${url}:`, error);
-      return null;
+  async parseFeed(url: string, retries: number = 2): Promise<ParsedFeedData | null> {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const feed = await this.parser.parseURL(url);
+        
+        return {
+          title: feed.title || 'Unknown Feed',
+          description: feed.description,
+          items: feed.items.map(item => ({
+            title: item.title,
+            link: item.link,
+            pubDate: item.pubDate,
+            content: item.content || item.contentSnippet,
+            contentSnippet: item.contentSnippet,
+            creator: item.creator,
+            categories: item.categories
+          }))
+        };
+      } catch (error) {
+        console.error(`Error parsing RSS feed ${url} (attempt ${attempt + 1}/${retries + 1}):`, error);
+        
+        if (attempt === retries) {
+          // On final attempt, try alternative URLs
+          if (url.endsWith('/feed')) {
+            const altUrl = url.replace('/feed', '/rss');
+            try {
+              const feed = await this.parser.parseURL(altUrl);
+              return {
+                title: feed.title || 'Unknown Feed',
+                description: feed.description,
+                items: feed.items.map(item => ({
+                  title: item.title,
+                  link: item.link,
+                  pubDate: item.pubDate,
+                  content: item.content || item.contentSnippet,
+                  contentSnippet: item.contentSnippet,
+                  creator: item.creator,
+                  categories: item.categories
+                }))
+              };
+            } catch (altError) {
+              console.error(`Alternative URL ${altUrl} also failed:`, altError);
+            }
+          }
+          return null;
+        }
+        
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+      }
     }
+    return null;
   }
 
   async checkFeed(feedId: string): Promise<{
