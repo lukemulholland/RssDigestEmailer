@@ -1,5 +1,7 @@
-import { drizzle } from "drizzle-orm/neon-http";
-import { neon } from "@neondatabase/serverless";
+import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
+import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
+import { neon, neonConfig } from "@neondatabase/serverless";
+import { Pool } from "pg";
 import { eq, desc, gt, sql } from "drizzle-orm";
 import {
   feeds,
@@ -25,8 +27,42 @@ export class PostgresStorage implements IStorage {
   private db;
 
   constructor(connectionString: string) {
-    const sqlClient = neon(connectionString);
-    this.db = drizzle(sqlClient);
+    // Fail fast with a clear error if the database URL is missing
+    if (!connectionString) {
+      throw new Error(
+        "DATABASE_URL is not set. Provide your Postgres connection string in Render's environment variables."
+      );
+    }
+
+    // If this is a Neon serverless URL, use the HTTP driver; otherwise use node-postgres Pool (Render Managed Postgres)
+    const isNeon = /(^|@)[^/]*\.neon\.tech(\/|:)/.test(connectionString);
+
+    if (isNeon) {
+      // Improve stability for serverless HTTP driver in Node runtimes (e.g., Render)
+      neonConfig.fetchConnectionCache = true;
+
+      // Ensure proxies don't intercept Neon traffic
+      if (!process.env.NO_PROXY || !process.env.NO_PROXY.includes(".neon.tech")) {
+        process.env.NO_PROXY = process.env.NO_PROXY
+          ? `${process.env.NO_PROXY},.neon.tech`
+          : ".neon.tech";
+      }
+
+      const sqlClient = neon(connectionString);
+      this.db = drizzleNeon(sqlClient);
+    } else {
+      // Render Managed Postgres: TCP with SSL
+      // Either add '?ssl=true' to your DATABASE_URL or set SSL here for compatibility.
+      const pool = new Pool({
+        connectionString,
+        ssl:
+          // Respect explicit disabling via env if needed
+          process.env.PGSSL === "disable"
+            ? false
+            : { rejectUnauthorized: false },
+      });
+      this.db = drizzlePg(pool);
+    }
   }
 
   // Feeds
