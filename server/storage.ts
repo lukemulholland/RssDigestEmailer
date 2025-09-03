@@ -12,6 +12,7 @@ import {
   type DashboardStats
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { PostgresStorage } from "./storage/postgres";
 
 export interface IStorage {
   // Feeds
@@ -262,4 +263,12 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+let storage: IStorage;
+
+if (process.env.DATABASE_URL) {
+  storage = new PostgresStorage(process.env.DATABASE_URL);
+} else {
+  storage = new MemStorage();
+}
+
+export { storage };
