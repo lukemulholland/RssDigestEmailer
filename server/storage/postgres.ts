@@ -1,7 +1,7 @@
 import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
 import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import { neon, neonConfig } from "@neondatabase/serverless";
-import { Pool } from "pg";
+import pg from "pg";
 import { eq, desc, gt, sql } from "drizzle-orm";
 import {
   feeds,
@@ -53,6 +53,7 @@ export class PostgresStorage implements IStorage {
     } else {
       // Render Managed Postgres: TCP with SSL
       // Either add '?ssl=true' to your DATABASE_URL or set SSL here for compatibility.
+      const { Pool } = pg;
       const pool = new Pool({
         connectionString,
         ssl:
