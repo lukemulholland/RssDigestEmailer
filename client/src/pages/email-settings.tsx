@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Mail, Send, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Mail, Send, Loader2, CheckCircle, AlertCircle, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function EmailSettings() {
@@ -31,6 +31,13 @@ export default function EmailSettings() {
     queryKey: ["/api/email-settings"],
     queryFn: api.getEmailSettings,
   });
+
+  const { data: recipientsData } = useQuery({
+    queryKey: ["/api/recipients"],
+    queryFn: api.listRecipients,
+  });
+
+  const recipients = recipientsData?.recipients ?? [];
 
   useEffect(() => {
     if (emailSettings) {
@@ -86,12 +93,9 @@ export default function EmailSettings() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const recipients = formData.recipients
-      .split(",")
-      .map(email => email.trim())
-      .filter(email => email);
+    const recipientsFromServer = recipients;
 
-    if (recipients.length === 0) {
+    if (recipientsFromServer.length === 0) {
       toast({
         title: "Error",
         description: "At least one recipient email is required.",
@@ -102,7 +106,7 @@ export default function EmailSettings() {
 
     saveMutation.mutate({
       ...formData,
-      recipients,
+      recipients: recipientsFromServer,
     });
   };
 
@@ -265,22 +269,8 @@ export default function EmailSettings() {
                     data-testid="input-from-email"
                   />
                 </div>
-                
-                <div>
-                  <Label htmlFor="recipient-emails">Recipients</Label>
-                  <Textarea
-                    id="recipient-emails"
-                    rows={3}
-                    placeholder="email1@example.com, email2@example.com"
-                    value={formData.recipients}
-                    onChange={(e) => handleInputChange("recipients", e.target.value)}
-                    required
-                    data-testid="textarea-recipients"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Separate multiple emails with commas
-                  </p>
-                </div>
+                {/* Recipients Manager */}
+                <RecipientsManager />
                 
                 <div>
                   <Label htmlFor="subject-template">Email Subject Template</Label>
@@ -336,6 +326,88 @@ export default function EmailSettings() {
             </form>
           </CardContent>
         </Card>
+      </div>
+    </div>
+  );
+}
+
+function RecipientsManager() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data } = useQuery({
+    queryKey: ["/api/recipients"],
+    queryFn: api.listRecipients,
+  });
+  const recipients: string[] = data?.recipients ?? [];
+
+  const [newRecipient, setNewRecipient] = useState("");
+
+  const addMutation = useMutation({
+    mutationFn: (email: string) => api.addRecipient(email),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/recipients"] });
+      setNewRecipient("");
+      toast({ title: "Recipient added" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error?.message || "Failed to add recipient", variant: "destructive" });
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (email: string) => api.removeRecipient(email),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/recipients"] });
+      toast({ title: "Recipient removed" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error?.message || "Failed to remove recipient", variant: "destructive" });
+    },
+  });
+
+  const handleAdd = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const email = newRecipient.trim();
+    if (!email) return;
+    addMutation.mutate(email);
+  };
+
+  return (
+    <div>
+      <Label>Recipients</Label>
+      <div className="flex gap-2 mt-2">
+        <Input
+          placeholder="user@example.com"
+          value={newRecipient}
+          onChange={(e) => setNewRecipient(e.target.value)}
+          data-testid="input-new-recipient"
+        />
+        <Button type="button" onClick={() => handleAdd()} disabled={addMutation.isPending} data-testid="btn-add-recipient">
+          {addMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <Plus className="mr-2" size={16} />}
+          Add
+        </Button>
+      </div>
+      <div className="mt-3 space-y-2">
+        {recipients.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No recipients yet. Add at least one to enable emailing.</p>
+        ) : (
+          recipients.map((email) => (
+            <div key={email} className="flex items-center justify-between rounded-md border border-border p-2">
+              <span className="text-sm">{email}</span>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => removeMutation.mutate(email)}
+                disabled={removeMutation.isPending}
+                data-testid={`btn-remove-${email}`}
+              >
+                <Trash2 size={14} className="mr-1" /> Remove
+              </Button>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

@@ -32,6 +32,10 @@ export interface IStorage {
   // Email Settings
   getEmailSettings(): Promise<EmailSettings | undefined>;
   createOrUpdateEmailSettings(settings: InsertEmailSettings): Promise<EmailSettings>;
+  // Recipients
+  listRecipients(): Promise<string[]>;
+  addRecipient(email: string): Promise<string[]>;
+  removeRecipient(email: string): Promise<string[]>;
 
   // Schedule Settings
   getScheduleSettings(): Promise<ScheduleSettings | undefined>;
@@ -164,6 +168,69 @@ export class MemStorage implements IStorage {
       createdAt: this.emailSettings?.createdAt || new Date(),
     };
     return this.emailSettings;
+  }
+
+  // Recipients
+  async listRecipients(): Promise<string[]> {
+    if (!this.emailSettings) {
+      this.emailSettings = {
+        id: randomUUID(),
+        smtpServer: "",
+        smtpPort: 587,
+        smtpSecurity: "TLS",
+        fromEmail: "",
+        username: "",
+        password: "",
+        recipients: [],
+        subjectTemplate: "RSS Summary - {date}",
+        isActive: false,
+        createdAt: new Date(),
+      };
+    }
+    return this.emailSettings.recipients ?? [];
+  }
+
+  async addRecipient(email: string): Promise<string[]> {
+    if (!this.emailSettings) {
+      this.emailSettings = {
+        id: randomUUID(),
+        smtpServer: "",
+        smtpPort: 587,
+        smtpSecurity: "TLS",
+        fromEmail: "",
+        username: "",
+        password: "",
+        recipients: [],
+        subjectTemplate: "RSS Summary - {date}",
+        isActive: false,
+        createdAt: new Date(),
+      };
+    }
+    const set = new Set(this.emailSettings.recipients ?? []);
+    set.add(email);
+    this.emailSettings = { ...this.emailSettings, recipients: Array.from(set) };
+    return this.emailSettings.recipients;
+  }
+
+  async removeRecipient(email: string): Promise<string[]> {
+    if (!this.emailSettings) {
+      this.emailSettings = {
+        id: randomUUID(),
+        smtpServer: "",
+        smtpPort: 587,
+        smtpSecurity: "TLS",
+        fromEmail: "",
+        username: "",
+        password: "",
+        recipients: [],
+        subjectTemplate: "RSS Summary - {date}",
+        isActive: false,
+        createdAt: new Date(),
+      };
+    }
+    const filtered = (this.emailSettings.recipients ?? []).filter((e) => e !== email);
+    this.emailSettings = { ...this.emailSettings, recipients: filtered };
+    return this.emailSettings.recipients;
   }
 
   // Schedule Settings

@@ -25,9 +25,18 @@ export const api = {
   sendSummaryEmail: (id: string) => apiRequest("POST", `/api/summaries/${id}/send-email`),
 
   // Email Settings
-  getEmailSettings: () => fetch("/api/email-settings").then(res => res.json()),
+  getEmailSettings: async () => {
+    const res = await fetch("/api/email-settings");
+    if (!res.ok) return undefined;
+    return res.json();
+  },
   saveEmailSettings: (data: any) => apiRequest("POST", "/api/email-settings", data),
   sendTestEmail: () => apiRequest("POST", "/api/email-settings/test"),
+
+  // Recipients
+  listRecipients: () => fetch("/api/recipients").then(res => res.json()),
+  addRecipient: (email: string) => apiRequest("POST", "/api/recipients", { email }),
+  removeRecipient: (email: string) => apiRequest("DELETE", `/api/recipients/${encodeURIComponent(email)}`),
 
   // Schedule
   getSchedule: () => fetch("/api/schedule").then(res => res.json()),

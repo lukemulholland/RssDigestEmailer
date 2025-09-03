@@ -119,6 +119,86 @@ export class PostgresStorage implements IStorage {
     return created;
   }
 
+  // Recipients
+  async listRecipients(): Promise<string[]> {
+    let settings = await this.getEmailSettings();
+    if (!settings) {
+      const [created] = await this.db
+        .insert(emailSettings)
+        .values({
+          smtpServer: "",
+          smtpPort: 587,
+          smtpSecurity: "TLS",
+          fromEmail: "",
+          username: "",
+          password: "",
+          recipients: [],
+          subjectTemplate: "RSS Summary - {date}",
+          isActive: false,
+        })
+        .returning();
+      settings = created;
+    }
+    return settings.recipients ?? [];
+  }
+
+  async addRecipient(email: string): Promise<string[]> {
+    let settings = await this.getEmailSettings();
+    if (!settings) {
+      const [created] = await this.db
+        .insert(emailSettings)
+        .values({
+          smtpServer: "",
+          smtpPort: 587,
+          smtpSecurity: "TLS",
+          fromEmail: "",
+          username: "",
+          password: "",
+          recipients: [],
+          subjectTemplate: "RSS Summary - {date}",
+          isActive: false,
+        })
+        .returning();
+      settings = created;
+    }
+    const set = new Set(settings.recipients ?? []);
+    set.add(email);
+    const [updated] = await this.db
+      .update(emailSettings)
+      .set({ recipients: Array.from(set) })
+      .where(eq(emailSettings.id, settings.id))
+      .returning();
+    return updated.recipients;
+  }
+
+  async removeRecipient(email: string): Promise<string[]> {
+    let settings = await this.getEmailSettings();
+    if (!settings) {
+      const [created] = await this.db
+        .insert(emailSettings)
+        .values({
+          smtpServer: "",
+          smtpPort: 587,
+          smtpSecurity: "TLS",
+          fromEmail: "",
+          username: "",
+          password: "",
+          recipients: [],
+          subjectTemplate: "RSS Summary - {date}",
+          isActive: false,
+        })
+        .returning();
+      settings = created;
+    }
+    const filtered = (settings.recipients ?? []).filter((e) => e !== email);
+    const [updated] = await this.db
+      .update(emailSettings)
+      .set({ recipients: filtered })
+      .where(eq(emailSettings.id, settings.id))
+      .returning();
+    return updated.recipients;
+  }
+
   // Schedule Settings
   async getScheduleSettings(): Promise<ScheduleSettings | undefined> {
     const [settings] = await this.db.select().from(scheduleSettings).limit(1);

@@ -202,7 +202,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/email-settings", async (req, res) => {
     try {
       const settings = await storage.getEmailSettings();
-      if (!settings) {
+      const isConfigured = !!(
+        settings &&
+        settings.smtpServer &&
+        settings.fromEmail &&
+        settings.username &&
+        settings.password
+      );
+
+      if (!isConfigured) {
         return res.status(404).json({ error: "Email settings not configured" });
       }
       
@@ -244,6 +252,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to send test email" });
+    }
+  });
+
+  // Recipient management endpoints
+  const isValidEmail = (email: string) => /.+@.+\..+/.test(email);
+
+  app.get("/api/recipients", async (req, res) => {
+    try {
+      const recipients = await storage.listRecipients();
+      res.json({ recipients });
+    } catch (error: any) {
+      const status = error?.status || 500;
+      res.status(status).json({ error: error?.message || "Failed to list recipients" });
+    }
+  });
+
+  app.post("/api/recipients", async (req, res) => {
+    try {
+      const email = (req.body?.email || "").trim();
+      if (!isValidEmail(email)) {
+        return res.status(400).json({ error: "Invalid email address" });
+      }
+      const recipients = await storage.addRecipient(email);
+      await storage.createActivityLog({
+        type: 'info',
+        message: `Recipient added: ${email}`,
+        details: { email },
+        level: 'info',
+      });
+      res.status(201).json({ recipients });
+    } catch (error: any) {
+      const status = error?.status || 500;
+      res.status(status).json({ error: error?.message || "Failed to add recipient" });
+    }
+  });
+
+  app.delete("/api/recipients/:email", async (req, res) => {
+    try {
+      const email = decodeURIComponent(req.params.email);
+      if (!isValidEmail(email)) {
+        return res.status(400).json({ error: "Invalid email address" });
+      }
+      const recipients = await storage.removeRecipient(email);
+      await storage.createActivityLog({
+        type: 'info',
+        message: `Recipient removed: ${email}`,
+        details: { email },
+        level: 'info',
+      });
+      res.json({ recipients });
+    } catch (error: any) {
+      const status = error?.status || 500;
+      res.status(status).json({ error: error?.message || "Failed to remove recipient" });
     }
   });
 
