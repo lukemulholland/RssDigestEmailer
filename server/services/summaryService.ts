@@ -8,6 +8,14 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR || "default_key" 
 });
 
+// Increase the amount of article content included in the prompt
+// Tuneable via env var; defaults to 2000 characters
+const ARTICLE_CHAR_LIMIT = (() => {
+  const raw = process.env.ARTICLE_CHAR_LIMIT;
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : 2000;
+})();
+
 interface ArticleData {
   title: string;
   content: string;
@@ -129,9 +137,12 @@ export class SummaryService {
   }> {
     try {
       // Prepare content for AI
-      const articleTexts = articles.map(article => 
-        `**${article.title}** (${article.source})\n${article.content.substring(0, 500)}...`
-      ).join('\n\n');
+      const articleTexts = articles.map(article => {
+        const text = article.content || "";
+        const snippet = text.slice(0, ARTICLE_CHAR_LIMIT);
+        const ellipsis = text.length > ARTICLE_CHAR_LIMIT ? "..." : "";
+        return `**${article.title}** (${article.source})\n${snippet}${ellipsis}`;
+      }).join('\n\n');
 
       const prompt = `Please analyze the following RSS feed articles and create a comprehensive summary. Return your response in JSON format with the following structure:
 
