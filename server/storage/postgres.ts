@@ -1,7 +1,7 @@
 import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
 import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
-import { migrate as migratePg } from "drizzle-orm/node-postgres/migrator";
 import path from "node:path";
+import fs from "node:fs/promises";
 import { neon, neonConfig } from "@neondatabase/serverless";
 import pg from "pg";
 import { eq, desc, gt, sql } from "drizzle-orm";
@@ -74,7 +74,23 @@ export class PostgresStorage implements IStorage {
   async migrate(): Promise<void> {
     if (!this.pool) return; // only applicable for node-postgres driver
     const migrationsFolder = path.resolve(process.cwd(), "migrations");
-    await migratePg(this.db, { migrationsFolder });
+    try {
+      const entries = await fs.readdir(migrationsFolder);
+      const sqlFiles = entries.filter((f) => f.endsWith(".sql")).sort();
+      for (const file of sqlFiles) {
+        const fullPath = path.join(migrationsFolder, file);
+        const sqlText = await fs.readFile(fullPath, "utf8");
+        if (sqlText.trim().length === 0) continue;
+        await this.pool.query(sqlText);
+      }
+    } catch (err: any) {
+      // If folder not found, skip quietly; otherwise rethrow
+      if (err && err.code === 'ENOENT') {
+        console.warn(`[migrate] migrations folder not found at ${migrationsFolder}, skipping.`);
+        return;
+      }
+      throw err;
+    }
   }
 
   // Feeds
