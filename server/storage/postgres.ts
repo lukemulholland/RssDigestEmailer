@@ -81,7 +81,33 @@ export class PostgresStorage implements IStorage {
         const fullPath = path.join(migrationsFolder, file);
         const sqlText = await fs.readFile(fullPath, "utf8");
         if (sqlText.trim().length === 0) continue;
-        await this.pool.query(sqlText);
+
+        // naive split on semicolons to run statements individually
+        const statements = sqlText
+          .split(/;\s*\n/g)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+
+        for (const stmt of statements) {
+          try {
+            await this.pool.query(stmt);
+          } catch (err: any) {
+            const text = (stmt || "").toLowerCase();
+            const isCreateExtension = text.startsWith("create extension");
+            const code = err?.code as string | undefined;
+            const msg = String(err?.message || "");
+            // Ignore permission errors for CREATE EXTENSION, allow startup to proceed
+            if (isCreateExtension && (code === '42501' || msg.includes('permission denied'))) {
+              console.warn(`[migrate] Skipping extension creation due to permissions: ${stmt}`);
+              continue;
+            }
+            // If extension already exists or statement is idempotent, keep going
+            if (isCreateExtension && (msg.includes('already exists') || code === '42710')) {
+              continue;
+            }
+            throw err;
+          }
+        }
       }
     } catch (err: any) {
       // If folder not found, skip quietly; otherwise rethrow
