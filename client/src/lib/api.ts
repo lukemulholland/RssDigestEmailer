@@ -10,8 +10,8 @@ export const api = {
   createFeed: (data: any) => apiRequest("POST", "/api/feeds", data),
   updateFeed: (id: string, data: any) => apiRequest("PATCH", `/api/feeds/${id}`, data),
   deleteFeed: (id: string) => apiRequest("DELETE", `/api/feeds/${id}`),
-  checkFeed: (id: string) => apiRequest("POST", `/api/feeds/${id}/check`),
-  checkAllFeeds: () => apiRequest("POST", "/api/feeds/check-all"),
+  checkFeed: (id: string) => apiRequest("POST", `/api/feeds/${id}/check`, undefined, { timeoutMs: 60000 }),
+  checkAllFeeds: () => apiRequest("POST", "/api/feeds/check-all", undefined, { timeoutMs: 90000 }),
   validateFeedUrl: (url: string) => apiRequest("POST", "/api/feeds/validate", { url }),
 
   // Summaries
@@ -20,9 +20,9 @@ export const api = {
     return fetch(url).then(res => res.json());
   },
   getSummary: (id: string) => fetch(`/api/summaries/${id}`).then(res => res.json()),
-  generateSummary: () => apiRequest("POST", "/api/summaries/generate"),
+  generateSummary: () => apiRequest("POST", "/api/summaries/generate", undefined, { timeoutMs: 180000 }),
   retrySummary: (id: string) => apiRequest("POST", `/api/summaries/${id}/retry`),
-  sendSummaryEmail: (id: string) => apiRequest("POST", `/api/summaries/${id}/send-email`),
+  sendSummaryEmail: (id: string) => apiRequest("POST", `/api/summaries/${id}/send-email`, undefined, { timeoutMs: 60000 }),
 
   // Email Settings
   getEmailSettings: async () => {
@@ -31,7 +31,7 @@ export const api = {
     return res.json();
   },
   saveEmailSettings: (data: any) => apiRequest("POST", "/api/email-settings", data),
-  sendTestEmail: () => apiRequest("POST", "/api/email-settings/test"),
+  sendTestEmail: () => apiRequest("POST", "/api/email-settings/test", undefined, { timeoutMs: 60000 }),
 
   // Recipients
   listRecipients: async () => {
@@ -44,7 +44,7 @@ export const api = {
   // Schedule
   getSchedule: () => fetch("/api/schedule").then(res => res.json()),
   saveSchedule: (data: any) => apiRequest("POST", "/api/schedule", data),
-  runNow: () => apiRequest("POST", "/api/schedule/run-now"),
+  runNow: () => apiRequest("POST", "/api/schedule/run-now", undefined, { timeoutMs: 120000 }),
 
   // Activity Logs
   getLogs: (limit?: number) => {
