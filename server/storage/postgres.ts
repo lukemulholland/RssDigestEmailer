@@ -1,5 +1,7 @@
 import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
 import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
+import { migrate as migratePg } from "drizzle-orm/node-postgres/migrator";
+import path from "node:path";
 import { neon, neonConfig } from "@neondatabase/serverless";
 import pg from "pg";
 import { eq, desc, gt, sql } from "drizzle-orm";
@@ -25,6 +27,7 @@ import type { IStorage } from "../storage";
 
 export class PostgresStorage implements IStorage {
   private db;
+  private pool: pg.Pool | null = null;
 
   constructor(connectionString: string) {
     // Fail fast with a clear error if the database URL is missing
@@ -62,8 +65,16 @@ export class PostgresStorage implements IStorage {
             ? false
             : { rejectUnauthorized: false },
       });
+      this.pool = pool;
       this.db = drizzlePg(pool);
     }
+  }
+
+  // Run SQL migrations from ./migrations when using node-postgres
+  async migrate(): Promise<void> {
+    if (!this.pool) return; // only applicable for node-postgres driver
+    const migrationsFolder = path.resolve(process.cwd(), "migrations");
+    await migratePg(this.db, { migrationsFolder });
   }
 
   // Feeds

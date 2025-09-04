@@ -339,3 +339,10 @@ if (process.env.DATABASE_URL) {
 }
 
 export { storage };
+
+export async function initializeStorage(): Promise<void> {
+  // If using PostgresStorage with node-postgres, run migrations
+  if (storage && typeof (storage as any).migrate === "function") {
+    await (storage as any).migrate();
+  }
+}
