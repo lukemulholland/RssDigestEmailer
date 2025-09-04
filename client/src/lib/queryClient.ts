@@ -1,5 +1,19 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+const DEFAULT_TIMEOUT_MS = 15000; // 15s safety timeout for network calls
+
+async function fetchWithTimeout(input: RequestInfo, init?: RequestInit & { timeoutMs?: number }) {
+  const timeoutMs = init?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(input, { ...init, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -12,7 +26,7 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,

@@ -27,7 +27,7 @@ export default function EmailSettings() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: emailSettings, isLoading } = useQuery({
+  const { data: emailSettings, isLoading, isError, error } = useQuery({
     queryKey: ["/api/email-settings"],
     queryFn: api.getEmailSettings,
   });
@@ -114,18 +114,7 @@ export default function EmailSettings() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  if (isLoading) {
-    return (
-      <div className="p-6 md:p-8">
-        <div className="animate-pulse space-y-6">
-          <div className="h-12 bg-muted rounded-lg" />
-          <div className="grid gap-4">
-            <div className="h-96 bg-muted rounded-lg" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Always render the form; show a small loading state instead of a blank page
 
   return (
     <div className="p-6 md:p-8" data-testid="email-settings-page">
@@ -147,17 +136,21 @@ export default function EmailSettings() {
               {/* Status Indicator */}
               <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <div className="flex items-center space-x-3">
-                  {emailSettings ? (
+                  {isLoading ? (
+                    <Loader2 className="text-muted-foreground animate-spin" size={20} />
+                  ) : emailSettings ? (
                     <CheckCircle className="text-green-600" size={20} />
                   ) : (
                     <AlertCircle className="text-yellow-600" size={20} />
                   )}
                   <div>
                     <p className="font-medium text-card-foreground">
-                      {emailSettings ? "Email Configured" : "Email Not Configured"}
+                      {isLoading ? "Loading email settings..." : emailSettings ? "Email Configured" : "Email Not Configured"}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {emailSettings 
+                      {isLoading 
+                        ? "Checking configuration"
+                        : emailSettings 
                         ? `Sending from ${emailSettings.fromEmail}` 
                         : "Complete the form below to enable email delivery"
                       }
@@ -173,6 +166,9 @@ export default function EmailSettings() {
 
               {/* SMTP Configuration */}
               <div className="space-y-4">
+                {isError && (
+                  <p className="text-sm text-destructive">{(error as any)?.message || "Failed to load email settings."}</p>
+                )}
                 <h3 className="text-lg font-medium text-card-foreground">SMTP Server Configuration</h3>
                 
                 <div>

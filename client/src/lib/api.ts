@@ -26,7 +26,7 @@ export const api = {
 
   // Email Settings
   getEmailSettings: async () => {
-    const res = await fetch("/api/email-settings");
+    const res = await fetch("/api/email-settings", { credentials: "include" });
     if (!res.ok) return undefined;
     return res.json();
   },
@@ -34,7 +34,10 @@ export const api = {
   sendTestEmail: () => apiRequest("POST", "/api/email-settings/test"),
 
   // Recipients
-  listRecipients: () => fetch("/api/recipients").then(res => res.json()),
+  listRecipients: async () => {
+    const res = await apiRequest("GET", "/api/recipients");
+    return res.json();
+  },
   addRecipient: (email: string) => apiRequest("POST", "/api/recipients", { email }),
   removeRecipient: (email: string) => apiRequest("DELETE", `/api/recipients/${encodeURIComponent(email)}`),
 
