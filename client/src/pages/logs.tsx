@@ -214,7 +214,7 @@ export default function Logs() {
                       {formatTime(log.createdAt)}
                     </p>
                     
-                    {log.details && (
+                    {log.details != null && (
                       <details className="mt-2">
                         <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
                           View details

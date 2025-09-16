@@ -135,6 +135,8 @@ export class SummaryService {
     content: string;
     excerpt: string;
   }> {
+    const fallbackSummary = this.buildFallbackSummary(articles);
+
     try {
       // Prepare content for AI
       const articleTexts = articles.map(article => {
@@ -173,27 +175,103 @@ Focus on identifying key themes, important developments, and providing a balance
         max_completion_tokens: 2000
       });
 
-      const result = JSON.parse(response.choices[0].message.content || '{}');
-      
+      const choice = response.choices?.[0];
+      if (!choice?.message) {
+        console.warn('AI summary response did not include a message. Using fallback summary.');
+        return fallbackSummary;
+      }
+
+      const rawContent = (() => {
+        const content = (choice.message as any).content;
+        if (typeof content === 'string') {
+          return content.trim();
+        }
+        if (Array.isArray(content)) {
+          return content
+            .map((part: any) => {
+              if (typeof part === 'string') return part;
+              if (part && typeof part.text === 'string') return part.text;
+              return '';
+            })
+            .join('')
+            .trim();
+        }
+        return '';
+      })();
+
+      if (!rawContent) {
+        console.warn('AI summary response did not contain JSON content. Using fallback summary.');
+        return fallbackSummary;
+      }
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(rawContent);
+      } catch (parseError) {
+        console.error('Failed to parse AI summary JSON response:', parseError);
+        console.warn('Raw AI response (truncated):', rawContent.slice(0, 200));
+        return fallbackSummary;
+      }
+
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        console.warn('AI summary response had unexpected structure. Using fallback summary.');
+        return fallbackSummary;
+      }
+
+      const title = typeof parsed.title === 'string' ? parsed.title.trim() : '';
+      const content = typeof parsed.content === 'string' ? parsed.content.trim() : '';
+      const excerpt = typeof parsed.excerpt === 'string' ? parsed.excerpt.trim() : '';
+
+      if (!content || /could not be generated/i.test(content)) {
+        console.warn('AI summary response was missing meaningful content. Using fallback summary.');
+        return fallbackSummary;
+      }
+
       return {
-        title: result.title || `News Summary - ${new Date().toLocaleDateString()}`,
-        content: result.content || 'Summary content could not be generated.',
-        excerpt: result.excerpt || 'News summary from multiple RSS feeds.'
+        title: title || fallbackSummary.title,
+        content,
+        excerpt: excerpt || fallbackSummary.excerpt
       };
 
     } catch (error) {
       console.error('Error creating AI summary:', error);
-      
-      // Fallback summary
-      const sourceNames = Array.from(new Set(articles.map(a => a.source))).join(', ');
-      const topTitles = articles.slice(0, 5).map(a => `• ${a.title}`).join('\n');
-      
-      return {
-        title: `News Summary - ${new Date().toLocaleDateString()}`,
-        excerpt: `Latest news from ${articles.length} articles across ${sourceNames}.`,
-        content: `# Latest News Summary\n\n**Sources:** ${sourceNames}\n\n**Top Stories:**\n${topTitles}\n\nThis summary was generated from ${articles.length} articles. AI summarization was unavailable.`
-      };
+      return fallbackSummary;
     }
+  }
+
+  private buildFallbackSummary(articles: ArticleData[]): {
+    title: string;
+    content: string;
+    excerpt: string;
+  } {
+    const articleCount = articles.length;
+    const uniqueSources = Array.from(new Set(articles.map(article => article.source).filter(Boolean)));
+    const sourceCount = uniqueSources.length;
+    const sourceList = sourceCount > 0 ? uniqueSources.join(', ') : 'your configured RSS feeds';
+    const topTitles = articles
+      .slice(0, 5)
+      .map(article => `• ${article.title}`)
+      .join('\n') || 'No articles were available to summarize.';
+
+    const articleLabel = `Latest news from ${articleCount} article${articleCount === 1 ? '' : 's'}`;
+    const sourceLabel = sourceCount > 0
+      ? `across ${sourceCount} source${sourceCount === 1 ? '' : 's'}.`
+      : 'from your configured RSS feeds.';
+
+    return {
+      title: `News Summary - ${new Date().toLocaleDateString()}`,
+      excerpt: `${articleLabel} ${sourceLabel}`.trim(),
+      content: [
+        '# Latest News Summary',
+        '',
+        `**Sources:** ${sourceList}`,
+        '',
+        '**Top Stories:**',
+        topTitles,
+        '',
+        `This summary was generated from ${articleCount} article${articleCount === 1 ? '' : 's'}. AI summarization was unavailable.`,
+      ].join('\n')
+    };
   }
 
   async retrySummary(summaryId: string): Promise<{
