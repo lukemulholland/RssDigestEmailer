@@ -2,6 +2,7 @@ import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
 import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import path from "node:path";
 import fs from "node:fs/promises";
+import type { ProcessEnv } from 'node:process';
 import { neon, neonConfig } from "@neondatabase/serverless";
 import pg from "pg";
 import { eq, desc, gt, sql } from "drizzle-orm";
@@ -27,96 +28,28 @@ import type { IStorage } from "../storage";
 
 export class PostgresStorage implements IStorage {
   private db;
-  private pool: pg.Pool | null = null;
 
   constructor(connectionString: string) {
-    // Fail fast with a clear error if the database URL is missing
     if (!connectionString) {
-      throw new Error(
-        "DATABASE_URL is not set. Provide your Postgres connection string in Render's environment variables."
-      );
+      throw new Error("DATABASE_URL is not set. Provide your Neon connection string.");
     }
-
-    // If this is a Neon serverless URL, use the HTTP driver; otherwise use node-postgres Pool (Render Managed Postgres)
-    const isNeon = /(^|@)[^/]*\.neon\.tech(\/|:)/.test(connectionString);
-
-    if (isNeon) {
-      // Improve stability for serverless HTTP driver in Node runtimes (e.g., Render)
-      neonConfig.fetchConnectionCache = true;
-
-      // Ensure proxies don't intercept Neon traffic
-      if (!process.env.NO_PROXY || !process.env.NO_PROXY.includes(".neon.tech")) {
-        process.env.NO_PROXY = process.env.NO_PROXY
-          ? `${process.env.NO_PROXY},.neon.tech`
-          : ".neon.tech";
-      }
-
-      const sqlClient = neon(connectionString);
-      this.db = drizzleNeon(sqlClient);
-    } else {
-      // Render Managed Postgres: TCP with SSL
-      // Either add '?ssl=true' to your DATABASE_URL or set SSL here for compatibility.
-      const { Pool } = pg;
-      const pool = new Pool({
-        connectionString,
-        ssl:
-          // Respect explicit disabling via env if needed
-          process.env.PGSSL === "disable"
-            ? false
-            : { rejectUnauthorized: false },
-      });
-      this.pool = pool;
-      this.db = drizzlePg(pool);
+    // Always use Neon HTTP driver
+    neonConfig.fetchConnectionCache = true;
+    // @ts-ignore: process.env is available in Node.js
+    if (typeof process !== 'undefined' && process.env && (!process.env.NO_PROXY || !process.env.NO_PROXY.includes(".neon.tech"))) {
+      // @ts-ignore: process.env is available in Node.js
+      process.env.NO_PROXY = process.env.NO_PROXY
+        ? `${process.env.NO_PROXY},.neon.tech`
+        : ".neon.tech";
     }
+    const sqlClient = neon(connectionString);
+    this.db = drizzleNeon(sqlClient);
   }
 
   // Run SQL migrations from ./migrations when using node-postgres
   async migrate(): Promise<void> {
-    if (!this.pool) return; // only applicable for node-postgres driver
-    const migrationsFolder = path.resolve(process.cwd(), "migrations");
-    try {
-      const entries = await fs.readdir(migrationsFolder);
-      const sqlFiles = entries.filter((f) => f.endsWith(".sql")).sort();
-      for (const file of sqlFiles) {
-        const fullPath = path.join(migrationsFolder, file);
-        const sqlText = await fs.readFile(fullPath, "utf8");
-        if (sqlText.trim().length === 0) continue;
-
-        // naive split on semicolons to run statements individually
-        const statements = sqlText
-          .split(/;\s*\n/g)
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0);
-
-        for (const stmt of statements) {
-          try {
-            await this.pool.query(stmt);
-          } catch (err: any) {
-            const text = (stmt || "").toLowerCase();
-            const isCreateExtension = text.startsWith("create extension");
-            const code = err?.code as string | undefined;
-            const msg = String(err?.message || "");
-            // Ignore permission errors for CREATE EXTENSION, allow startup to proceed
-            if (isCreateExtension && (code === '42501' || msg.includes('permission denied'))) {
-              console.warn(`[migrate] Skipping extension creation due to permissions: ${stmt}`);
-              continue;
-            }
-            // If extension already exists or statement is idempotent, keep going
-            if (isCreateExtension && (msg.includes('already exists') || code === '42710')) {
-              continue;
-            }
-            throw err;
-          }
-        }
-      }
-    } catch (err: any) {
-      // If folder not found, skip quietly; otherwise rethrow
-      if (err && err.code === 'ENOENT') {
-        console.warn(`[migrate] migrations folder not found at ${migrationsFolder}, skipping.`);
-        return;
-      }
-      throw err;
-    }
+    // No-op: migrations are managed externally for Neon
+    return;
   }
 
   // Feeds
@@ -280,7 +213,7 @@ export class PostgresStorage implements IStorage {
         .returning();
       settings = created;
     }
-    const filtered = (settings.recipients ?? []).filter((e) => e !== email);
+  const filtered = (settings.recipients ?? []).filter((e: string) => e !== email);
     const [updated] = await this.db
       .update(emailSettings)
       .set({ recipients: filtered })
